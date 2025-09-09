@@ -13,6 +13,7 @@ pip install -e ".[torch,metrics]" --no-build-isolation
 ## web ui
 llamafactory-cli webui
 
+# 服务器部署板块
 
 ## 安装napcat
 这个步骤会在ubuntu上安装napcat+QQ
@@ -38,3 +39,14 @@ nb run
 screen -R nonebot2
 screen -R napcat
 screen -X -S <screen_name> quit
+
+# 插件制作板块
+pip install ensurepath nb-cli openai
+nb create
+nb plugin create
+nb run
+
+将DASHSCOPE_API_KEY写入powershell临时环境变量
+$env:DASHSCOPE_API_KEY=""
+linux
+export DASHSCOPE_API_KEY=""
