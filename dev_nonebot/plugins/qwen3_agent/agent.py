@@ -64,6 +64,8 @@ class GroupState:
         self._token_count: int = 0  # token 统计
         # 防止在长时间无人说话时重复发送“活跃气氛”的提示
         self.idle_prompt_sent = False
+        # 最近一条用户图片的 URL 列表（用于空闲新话题时基于图片联想）
+        self.last_images = []
 
     def _count_tokens(self, text: str) -> int:
         return len(TOKENIZER.encode(text))
@@ -136,6 +138,8 @@ async def _(bot: Bot, event: GroupMessageEvent):
                     image_urls.append(str(url))
     except Exception:
         pass
+    # 记录最近图片（若无图片则清空）
+    state.last_images = list(image_urls) if image_urls else []
 
     # 检查是否 @ 到机器人（或以昵称开头），适配器会自动去除前缀方便命令匹配
     try:
@@ -213,6 +217,7 @@ async def _trigger_group_llm_reply(bot: Bot, event: GroupMessageEvent, gid: str,
             model=model,
             messages=messages,  # type: ignore[arg-type]
             tools=tools,
+            extra_body={"enable_search": bool(getattr(cfg, "enable_search", False))},
         )
 
         choice = rsp.choices[0]
@@ -282,12 +287,7 @@ async def _handle_images_with_vl(bot: Bot, event: GroupMessageEvent, gid: str, s
 
     # 构造符合 dashscope 兼容模式的多模态消息体
     persona = cfg.system_prompt
-    sys_text = (
-        f"{persona}\n"
-        "(当前为图片场景)：请仅依据图片内容进行理解与表达，保持活泼可爱的二次元少女口吻；"
-        "用1-2句话给出简短、有趣的描述或要点，末尾可加一个可爱表情或颜文字；"
-        "不要引用外部资料或臆测图片外的信息。"
-    )
+    sys_text = f"{persona}\n{cfg.vl_system_prompt}"
     msgs: List[Dict[str, Any]] = [
         {
             "role": "system",
@@ -376,6 +376,13 @@ async def _start_bg_tasks() -> None:
 
 async def _trigger_group_llm_reply_idle(gid: str, state: GroupState) -> None:
     """无事件上下文的触发：调用 LLM 并通过工具直接向群发送。"""
+    # 若最近一条用户消息为图片，占位在历史中；则优先基于该图片用 VL 抛出新话题
+    if state.history and state.history[-1][0] == "user" and state.last_images:
+        logger.debug(f"[group {gid}] IDLE using last images to start topic images={len(state.last_images)}")
+        ok = await _idle_new_topic_from_images(gid, state)
+        if ok:
+            return
+        logger.debug(f"[group {gid}] IDLE VL topic failed or empty, fallback to text path")
     tools = get_openai_tools()
     # idle 场景：改用专用系统提示，以引导开启轻话题、活跃气氛
     messages: List[Dict[str, Any]] = _build_messages(state.history, system_prompt=cfg.idle_system_prompt)
@@ -390,6 +397,7 @@ async def _trigger_group_llm_reply_idle(gid: str, state: GroupState) -> None:
             model=model,
             messages=messages,  # type: ignore[arg-type]
             tools=tools,
+            extra_body={"enable_search": bool(getattr(cfg, "enable_search", False))},
         )
 
         choice = rsp.choices[0]
@@ -453,3 +461,39 @@ async def _trigger_group_llm_reply_idle(gid: str, state: GroupState) -> None:
     state.add_message("assistant", "（自动播报）收到上下文，将在有更多线索时继续总结。", cfg.max_history_tokens)
     state.idle_prompt_sent = True
     state.last_activity = time.time()
+
+
+async def _idle_new_topic_from_images(gid: str, state: GroupState) -> bool:
+    """基于最近图片，用 VL 模型抛出一个新话题；成功返回 True。"""
+    urls = state.last_images[: max(1, int(getattr(cfg, 'vl_max_images', 1)))]
+    if not urls:
+        return False
+    model = os.getenv("QWEN_VL_MODEL", getattr(cfg, 'vl_model', 'qwen-vl-max-latest'))
+    logger.debug(f"[group {gid}] IDLE-VL start model={model} images={len(urls)}")
+
+    persona = cfg.system_prompt
+    sys_text = f"{persona}\n{cfg.vl_idle_system_prompt}"
+    msgs: List[Dict[str, Any]] = [
+        {"role": "system", "content": [{"type": "text", "text": sys_text}]},
+        {
+            "role": "user",
+            "content": [
+                *[{"type": "image_url", "image_url": {"url": u}} for u in urls]
+            ],
+        },
+    ]
+
+    try:
+        rsp = await client.chat.completions.create(model=model, messages=msgs)  # type: ignore[arg-type]
+        text = (rsp.choices[0].message.content or "").strip()
+        if not text:
+            return False
+    except Exception as e:
+        logger.exception("IDLE VL topic failed")
+        return False
+
+    await call_onebot_tool("send_group_msg", {"group_id": int(gid), "message": text})
+    state.add_message("assistant", text, cfg.max_history_tokens)
+    state.idle_prompt_sent = True
+    state.last_activity = time.time()
+    return True
