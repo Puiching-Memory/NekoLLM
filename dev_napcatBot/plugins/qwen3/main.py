@@ -4,6 +4,7 @@ from ncatbot.core.api import BotAPI
 from ncatbot.utils import get_log
 
 from openai import OpenAI
+from openai import BadRequestError
 import json
 import os
 
@@ -72,49 +73,26 @@ prompt = """
 12.适当使用反问和幽默来活跃气氛
 13.在讨论专业话题时展现知识面,但不过分炫耀
 
-名词解释:
-由于你活跃在各个群聊中,在某些情况下,你可能不理解他人的某些词汇,下面是这些词汇/梗的解释,你需要在聊天中选择合适的时机去使用这些词汇:
-6667/66667/666667:和6相同
-逆天/无敌:形容事物或者行为非常离谱
-草:幽默的表达
-典:形容某些事情或者言论过于经典,带有玩梗的意味
-重开:即"自杀" (转世投胎)的意思。也可以用英文单词/remake代替。
-爬/爪巴:四川话,意为"滚"。
-破防:指因揭短、阴阳怪气、直球辱骂、胡搅蛮缠等原因,心态爆炸,行为语言变得暴躁。近义词还有"他急了"。
-关注oo喵!关注oo谢谢喵!:出自永雏塔菲,后广为流传并用于给自己喜爱的虚拟UP主乃至其它事物进行引流
-绝活:来源于东北方言,在口语中是"给大伙表演个"的意思,指出人意料,一般人难以做到或难以理解的行为。其中难以复刻的神回则称之为绝活
-你先别急:字面意思。通常为吵架中的用语。当对方与你观点不同时,你又想不出能够反驳他的句子时,你就可以回复万用话术:"我知道你很急,但你先别急‌‌‌‌‌‌‌‌‌‌",让原本占据优势的对方一下子不知道怎么回复,有一种"明明我想薄纱你,却被你给化没了"。一来一回颇有打太极的魅力,从而达到攻击性高于任何一句垃圾话。
-已老实求放过: 意思是在破防时或面对某些事件无可奈何进行自嘲。
-憋笑:形容某个人或者事物让人忍俊不禁想笑。
-幽默xx:和上文的憋笑类似。
-(bushi: 不是的意思,表示否定。
-孝:利益相关,不是真诚表达。并暗示人格寄生。
-急:情绪破防,论辩上狗急跳墙。同时暗示败犬和人格幼稚。
-乐/蚌/赢:多用于嘲讽宏观政体或事物。
-114514:好,好吧,来自日语いいよ,こいよ的发音。
-因为他善: 可以理解成对一切问题的无厘头回答,形成了一种幽默和调侃的表达。
-xx来全杀了:该梗主要是关于脑吹IG选手TheShy的一个梗,出自英雄联盟前职业选手KIO的一次解说"这波换TheShy来了全杀了";
-夺笋:多损啊,指别人很缺德。
-唉就是玩:是我就是要这样做。
-awsl:意思是"啊xxx好可爱,我死了"
-233333:哈哈大笑的意思,来源猫扑的第233号表情包,是一张大笑的表情。
-xx使我快乐:比喻某件事让你感到开心。
-你礼貌吗:歌手耿斯汉和袁娅维第一次见面,耿刚打完招呼,就向袁娅维要微信,这种直男让周深直接就调侃说了一句"你礼貌吗"
-笑点解析:令人忍俊不禁
-牛马: 常被引申为在工作中勤奋努力、不怕吃苦、任劳任怨的苦逼打工人,一般用于自嘲或开玩笑。
-古希腊掌管XX的神: 用来形容或调侃某人在某一领域有特别的、突出的能力和地位。适用于各个领域,上至天文地理,下至日常生活,比如"我是古希腊掌管睡觉的神","他是古希腊掌管红毯的神"等。
-
 工具调用:
-你必须经常使用以下工具来辅助你的回复:
+你必须经常使用以下工具来辅助你的回复,除了处理图片消息时:
 1.戳一戳某个群友(send_poke)
 2.为你感兴趣的消息回应一个表情(set_msg_emoji_like)
+查询各个表情ID的含义,前往:https://bot.q.qq.com/wiki/develop/api-v2/openapi/emoji/model.html#EmojiType
 3.给某个群友发送点赞(send_like)
 
-注意:根据这些因素调整回复的语气和内容,保持角色的一致性和真实感。
-注意事项:
-1.每条消息只能包含5到20个字符,可以发送多条消息
-2.@功能可在回复内容中使用多次
+当你在处理图片消息时,你需要基于图片的内容进行回复。
 """
+
+VL_prompt = """
+"""
+
+def get_image_url(message:list):
+    for msg in message:
+        if msg.get("type") == "image":
+            return msg.get("data").get("url")
+    
+    return False
+
 
 class qwen3(BasePlugin):
     name = "qwen3" # 插件名
@@ -130,15 +108,41 @@ class qwen3(BasePlugin):
 
     @bot.group_event()
     async def on_group_message(self, msg: GroupMessage):
-        # 跳过图片消息
-        if "CQ:image,file=" in msg.raw_message:
-            logger.info("跳过图片消息")
-            return
+        # 工具函数：清空当前群的上下文并重置水温
+        def _reset_context():
+            context[msg.group_id] = [{'role': 'system', 'content': prompt}]
+            self.waterHot = 0
+            logger.warning(f"因内容违规或异常，已清空上下文并重置水温，group={msg.group_id}")
 
+        # 创建上下文
+        if context.get(msg.group_id) is None:
+            context[msg.group_id] = [{'role': 'system', 'content': prompt}]
+
+        # 当context过长时,删除最早的一条记录
+        if len(context[msg.group_id]) > 35:
+            # 仅删除最早的一条用户/助手消息，保留系统提示
+            context[msg.group_id].pop(1)
+
+        # 记录历史信息
+        m = re.search(r'qq=(\d+)', msg.raw_message)
+        image_url = get_image_url(msg.message)
+        if image_url and m:
+            context[msg.group_id].append({'role': "user", 'content': [
+                {"type": "image_url","image_url": {"url": image_url}},
+                {"type": "text", "text": f"群聊-{msg.group_id} 发出用户-{msg.user_id} At用户-{m.groups()} 群消息ID-{msg.message_id}: {msg.raw_message}"}]})
+        elif image_url and not m:
+            context[msg.group_id].append({'role': "user", 'content': [
+                {"type": "image_url","image_url": {"url": image_url}},
+                {"type": "text", "text": f"群聊-{msg.group_id} 发出用户-{msg.user_id} 群消息ID-{msg.message_id}: {msg.raw_message}"}]})
+        elif not image_url and m:
+            context[msg.group_id].append({'role': "user", 'content': f"群聊-{msg.group_id} 发出用户-{msg.user_id} At用户-{m.groups()} 消息ID-{msg.message_id}: {msg.raw_message}"})
+        else:
+            context[msg.group_id].append({'role': "user", 'content': f"群聊-{msg.group_id} 发出用户-{msg.user_id} 消息ID-{msg.message_id}: {msg.raw_message}"})
+            
         # 每当水温累计到100就触发一次
         if str(msg.self_id) in msg.raw_message:
             self.waterHot = 100
-            logger.info("At自己直接触发")
+            logger.info("At自己直接满水温触发")
 
         if self.waterHot < 100:
             self.waterHot += random.randint(1, 25)
@@ -147,42 +151,51 @@ class qwen3(BasePlugin):
         else:
             self.waterHot = 0
             logger.info("水温到达100,触发回复")
-
-        # 创建上下文
-        if context.get(msg.group_id) is None:
-            context[msg.group_id] = [{'role': 'system', 'content': prompt}]
-        if len(context[msg.group_id]) > 35:
-            context[msg.group_id].pop(1)
-
-        # 处理@功能
-        m = re.search(r'qq=(\d+)', msg.raw_message)
-        if m:
-            context[msg.group_id].append({'role': "user", 'content': f"群聊-{msg.group_id} 发出用户-{msg.user_id} At用户-{m.groups()} 消息ID-{msg.message_id}: {msg.raw_message}"})
-        else:
-            context[msg.group_id].append({'role': "user", 'content': f"群聊-{msg.group_id} 发出用户-{msg.user_id} 消息ID-{msg.message_id}: {msg.raw_message}"})
+    
+        # 如果使用VL模型,则跳过工具调用,直接回复
+        if image_url:
+            try:
+                response = client.chat.completions.create(
+                    model="qwen-vl-max-latest",
+                    messages=context[msg.group_id],
+                )
+                await msg.reply(text=response.choices[0].message.content,at=msg.user_id)
+            except Exception as e:
+                logger.error(f"{e}")
+                # 违规拦截：清空上下文
+                if "data_inspection_failed" in str(e):
+                    _reset_context()
+                             
+            return
         
-
-
+        # 工具调用循环
         tools_step = 0
-
         while True:
             tools_step += 1
             logger.info(f"第{tools_step}次调用工具")
 
-            response = client.chat.completions.create(
-                model="qwen-plus-2025-07-28",
-                messages=context[msg.group_id],
-                extra_body={
-                    "enable_search": True,  # 开启联网搜索
-                    "search_options": {
-                        "forced_search": False,  # 强制联网搜索
-                        "search_strategy": "max",
+            try:
+                response = client.chat.completions.create(
+                    model="qwen-plus-2025-07-28",
+                    messages=context[msg.group_id],
+                    extra_body={
+                        "enable_search": True,  # 开启联网搜索
+                        "search_options": {
+                            "forced_search": False,  # 强制联网搜索
+                            "search_strategy": "max",
+                        },
                     },
-                },
-                tools=tools,
-                parallel_tool_calls=True, # 允许并行工具调用
+                    tools=tools,
+                    parallel_tool_calls=True, # 允许并行工具调用
                 )
+            except Exception as e:
+                logger.error(f"{e}")
+                if "data_inspection_failed" in str(e):
+                    _reset_context()
+
+                return
             
+            # 如果没有工具调用,则直接回复
             if response.choices[0].message.tool_calls is None:
                 context[msg.group_id].append({
                     'role': 'assistant',
