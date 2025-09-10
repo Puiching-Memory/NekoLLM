@@ -1,7 +1,7 @@
 from nonebot import get_plugin_config
 from nonebot.plugin import PluginMetadata
-
 from .config import Config
+from . import agent
 
 __plugin_meta__ = PluginMetadata(
     name="qwen3-agent",
@@ -11,7 +11,4 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config = get_plugin_config(Config)
-
-# 导入子模块以注册事件响应器/匹配器
-from . import agent  # noqa: F401
 

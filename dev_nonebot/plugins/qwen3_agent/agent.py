@@ -13,7 +13,6 @@ from openai import AsyncOpenAI
 import tiktoken
 
 from .config import Config
-from .tools4onebotv11 import get_openai_tools, call_onebot_tool
 
 
 # 异步 OpenAI 客户端（DashScope 兼容模式）
@@ -23,12 +22,10 @@ client = AsyncOpenAI(
 )
 
 cfg: Config = get_plugin_config(Config)
-
-# 事件响应器：仅处理群消息，设置较低优先级且不阻塞，避免影响其他插件
-matcher = on_message(rule=is_type(GroupMessageEvent), priority=99, block=False)
-
-
 SYSTEM_PROMPT = cfg.system_prompt
+# 事件响应器：仅处理群消息，设置较低优先级且不阻塞，避免影响其他插件
+matcher = on_message(rule=is_type(GroupMessageEvent))
+
 
 
 # =============== 小工具函数 ===============
@@ -123,79 +120,30 @@ GROUP_STATES: Dict[str, GroupState] = {}
 TOKENIZER = tiktoken.get_encoding(cfg.token_encoding or "cl100k_base")
 
 
-# =============== 复用：工具调用循环与 VL 处理 ===============
+# =============== 复用：LLM 与 VL 处理（无工具） ===============
 
-async def _run_llm_tool_loop(
+async def _run_llm_simple(
     gid: str,
     messages: List[Dict[str, Any]],
-    tools: List[Dict[str, Any]],
     model: str,
     idle: bool = False,
 ) -> str:
-    """统一的 ChatCompletions 工具循环。
+    """简单的 ChatCompletions 调用（不使用工具）。
 
-    返回：最终文本；若在最大轮次内没有最终文本返回空串。
+    返回：模型文本；失败时返回空串。
     """
-    for _round in range(cfg.max_tool_rounds):
+    try:
         logger.debug(
-            f"[group {gid}] {'IDLE ' if idle else ''}LLM round={_round + 1} messages={len(messages)}"
+            f"[group {gid}] {'IDLE ' if idle else ''}LLM messages={len(messages)}"
         )
         rsp = await client.chat.completions.create(
             model=model,
             messages=messages,  # type: ignore[arg-type]
-            tools=tools,
-            extra_body={"enable_search": bool(getattr(cfg, "enable_search", False))},
         )
-
-        choice = rsp.choices[0]
-        msg = choice.message
-
-        if getattr(msg, "tool_calls", None):
-            for tc in msg.tool_calls:  # type: ignore[union-attr]
-                name = tc.function.name
-                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                logger.debug(
-                    f"[group {gid}] {'(idle) ' if idle else ''}tool_call name={name} args={args}"
-                )
-                try:
-                    result = await call_onebot_tool(name, args)
-                    content = json.dumps(result, ensure_ascii=False)
-                    logger.debug(
-                        f"[group {gid}] {'(idle) ' if idle else ''}tool_result name={name} size={len(content)} preview=\"{_truncate(content)}\""
-                    )
-                except Exception as e:
-                    logger.exception(
-                        f"tool call failed{' (idle)' if idle else ''}: {name}"
-                    )
-                    content = json.dumps({"error": str(e)}, ensure_ascii=False)
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": content,
-                })
-
-            # Echo assistant 带有 tool_calls 的消息
-            messages.append({
-                "role": "assistant",
-                "content": msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in msg.tool_calls  # type: ignore[union-attr]
-                ],
-            })
-            continue
-
-        return msg.content or ""
-
-    return ""
+        return rsp.choices[0].message.content or ""
+    except Exception:
+        logger.exception("LLM request failed")
+        return ""
 
 
 def _build_vl_messages(sys_text: str, urls: List[str]) -> List[Dict[str, Any]]:
@@ -298,16 +246,15 @@ async def _(bot: Bot, event: GroupMessageEvent):
 
 
 async def _trigger_group_llm_reply(bot: Bot, event: GroupMessageEvent, gid: str, state: GroupState) -> None:
-    # 统一的 LLM 调用循环（含工具调用）
-    tools = get_openai_tools()
+    # 统一的 LLM 调用（无工具）
     messages: List[Dict[str, Any]] = _build_messages(state.history)
     model = os.getenv("QWEN_MODEL") or cfg.qwen_model
 
     logger.debug(
-        f"[group {gid}] LLM start model={model} history_len={len(state.history)} tokens={state._token_count} tools={len(tools)}"
+        f"[group {gid}] LLM start model={model} history_len={len(state.history)} tokens={state._token_count}"
     )
 
-    final_text = await _run_llm_tool_loop(gid, messages, tools, model)
+    final_text = await _run_llm_simple(gid, messages, model)
 
     if final_text:
         logger.debug(f"[group {gid}] assistant final len={len(final_text)} preview=\"{_truncate(final_text)}\"")
@@ -393,26 +340,25 @@ async def _trigger_group_llm_reply_idle(gid: str, state: GroupState) -> None:
         if ok:
             return
         logger.debug(f"[group {gid}] IDLE VL topic failed or empty, fallback to text path")
-    tools = get_openai_tools()
     messages: List[Dict[str, Any]] = _build_messages(state.history, system_prompt=cfg.idle_system_prompt)
     model = os.getenv("QWEN_MODEL") or cfg.qwen_model
 
     logger.debug(
-        f"[group {gid}] IDLE LLM start model={model} history_len={len(state.history)} tokens={state._token_count} tools={len(tools)}"
+        f"[group {gid}] IDLE LLM start model={model} history_len={len(state.history)} tokens={state._token_count}"
     )
 
-    final_text = await _run_llm_tool_loop(gid, messages, tools, model, idle=True)
+    final_text = await _run_llm_simple(gid, messages, model, idle=True)
 
     if final_text:
         logger.debug(f"[group {gid}] (idle) assistant final len={len(final_text)} preview=\"{_truncate(final_text)}\"")
-        await call_onebot_tool("send_group_msg", {"group_id": int(gid), "message": final_text})
+        await _send_group_text(gid, final_text)
         state.add_message("assistant", final_text, cfg.max_history_tokens)
         state.idle_prompt_sent = True
         state.last_activity = time.time()
     else:
         # 超过轮次仍未给出最终答复
         fallback = "（自动播报）收到上下文，将在有更多线索时继续总结。"
-        await call_onebot_tool("send_group_msg", {"group_id": int(gid), "message": fallback})
+        await _send_group_text(gid, fallback)
         state.add_message("assistant", fallback, cfg.max_history_tokens)
         state.idle_prompt_sent = True
         state.last_activity = time.time()
@@ -432,87 +378,11 @@ async def _idle_new_topic_from_images(gid: str, state: GroupState) -> bool:
     if not text.strip():
         return False
 
-    await call_onebot_tool("send_group_msg", {"group_id": int(gid), "message": text})
+    await _send_group_text(gid, text)
     state.add_message("assistant", text, cfg.max_history_tokens)
     state.idle_prompt_sent = True
     state.last_activity = time.time()
     return True
-
-
-# =============== 复用：工具调用循环与 VL 处理 ===============
-
-async def _run_llm_tool_loop(
-    gid: str,
-    messages: List[Dict[str, Any]],
-    tools: List[Dict[str, Any]],
-    model: str,
-    idle: bool = False,
-) -> str:
-    """统一的 ChatCompletions 工具循环。
-
-    返回：最终文本；若在最大轮次内没有最终文本返回空串。
-    """
-    for _round in range(cfg.max_tool_rounds):
-        logger.debug(
-            f"[group {gid}] {'IDLE ' if idle else ''}LLM round={_round + 1} messages={len(messages)}"
-        )
-        rsp = await client.chat.completions.create(
-            model=model,
-            messages=messages,  # type: ignore[arg-type]
-            tools=tools,
-            extra_body={"enable_search": bool(getattr(cfg, "enable_search", False))},
-        )
-
-        choice = rsp.choices[0]
-        msg = choice.message
-
-        if getattr(msg, "tool_calls", None):
-            for tc in msg.tool_calls:  # type: ignore[union-attr]
-                name = tc.function.name
-                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                logger.debug(
-                    f"[group {gid}] {'(idle) ' if idle else ''}tool_call name={name} args={args}"
-                )
-                try:
-                    result = await call_onebot_tool(name, args)
-                    content = json.dumps(result, ensure_ascii=False)
-                    logger.debug(
-                        f"[group {gid}] {'(idle) ' if idle else ''}tool_result name={name} size={len(content)} preview=\"{_truncate(content)}\""
-                    )
-                except Exception as e:
-                    logger.exception(
-                        f"tool call failed{' (idle)' if idle else ''}: {name}"
-                    )
-                    content = json.dumps({"error": str(e)}, ensure_ascii=False)
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": content,
-                })
-
-            # Echo assistant 带有 tool_calls 的消息
-            messages.append({
-                "role": "assistant",
-                "content": msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in msg.tool_calls  # type: ignore[union-attr]
-                ],
-            })
-            continue
-
-        return msg.content or ""
-
-    return ""
-
 
 def _build_vl_messages(sys_text: str, urls: List[str]) -> List[Dict[str, Any]]:
     return [
@@ -538,3 +408,16 @@ async def _generate_vl_text(sys_text: str, urls: List[str], model: str) -> str:
     except Exception as e:
         logger.exception("VL request failed")
         return f"图片解析失败：{e}"
+
+
+async def _send_group_text(gid: str, text: str) -> None:
+    """通过可用的 Bot 主动向群发送文本（替代工具调用）。"""
+    try:
+        bots = get_driver().bots
+        if not bots:
+            logger.warning("no connected bot to send group message")
+            return
+        bot = next(iter(bots.values()))
+        await bot.call_api("send_group_msg", group_id=int(gid), message=text)
+    except Exception:
+        logger.exception("failed to send group message")
