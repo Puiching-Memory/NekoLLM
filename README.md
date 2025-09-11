@@ -11,20 +11,23 @@ sudo bash ./launcher.sh
 wget https://ghfast.top/https://github.com/conda-forge/miniforge/releases/download/25.3.1-0/Miniforge3-25.3.1-0-Linux-x86_64.sh
 wget https://ghfast.top/https://github.com/RubyMetric/chsrc/releases/download/v0.2.2/chsrc-x64-linux
 
-conda create -n napcatbot python=3.13
-conda activate napcatbot
+conda create -n napcat python=3.13
+conda activate napcat
 
 pip install ncatbot
 
 ## 配置screen
-screen -R napcatBot
-screen -R napcatQQ
+screen -R napcat
 screen -X -S <screen_name> quit
 
 # 插件制作板块
 
 
-## 将DASHSCOPE_API_KEY写入powershell临时环境变量
+## 将DASHSCOPE_API_KEY写入临时环境变量
 $env:DASHSCOPE_API_KEY=""
 linux
 export DASHSCOPE_API_KEY=""
+
+## 将API_TOKEN写入系统环境变量
+$env:API_TOKEN=""
+export API_TOKEN=""

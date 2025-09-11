@@ -1,35 +1,63 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from __future__ import annotations
 
-model_name = "Qwen/Qwen3-4B-Instruct-2507"
+# 标准库与类型
+import os
+import sys
+from contextlib import asynccontextmanager
 
-# load the tokenizer and the model
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    dtype="auto",
-    device_map="auto",
-    load_in_4bit=True,
+# Web 框架与第三方库
+from fastapi import FastAPI, Depends, HTTPException, status, Query
+from loguru import logger
+from pydantic import BaseModel
+from fastapi.security import APIKeyHeader
+from fastapi import Security, Depends
+
+# --- 日志配置（loguru） ---
+# 移除了默认 handler 以便自定义；日志级别从环境变量 LOG_LEVEL 读取，默认 INFO。
+logger.remove()
+logger.add(sys.stderr, level=os.getenv("LOG_LEVEL", "INFO"))
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+	"""
+	应用生命周期管理：替代已弃用的 @app.on_event("startup"/"shutdown")。
+	进入时视为启动，退出时视为关闭。
+	"""
+	logger.info("NekoLLM API starting up")
+	try:
+		yield  # 应用运行期间在此挂起
+	finally:
+		logger.info("NekoLLM API shutting down")
+
+
+app = FastAPI(
+	title="NekoLLM API",
+	version="0.1.0",
+	lifespan=lifespan,
 )
 
-# prepare the model input
-prompt = "LLM是什么?"
-messages = [
-    {"role": "user", "content": prompt}
-]
-text = tokenizer.apply_chat_template(
-    messages,
-    tokenize=False,
-    add_generation_prompt=True,
-)
-model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+api_key_header = APIKeyHeader(name="Authorization")
 
-# conduct text completion
-generated_ids = model.generate(
-    **model_inputs,
-    max_new_tokens=16384
-)
-output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if api_key != os.getenv("API_TOKEN"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key",
+        )
+    return api_key
+@app.post("/send_poke")
+async def send_poke(key: str = Depends(get_api_key), user_id: str = Query(), group_id: str = Query()):
+	return {"status": "ok"}
 
-content = tokenizer.decode(output_ids, skip_special_tokens=True)
+if __name__ == "__main__":
+	# 本地开发入口：使用 uvicorn 启动服务
+	# 可通过环境变量覆盖默认设置：HOST/PORT/RELOAD
+	# 调试url: http://127.0.0.1:6077/docs
+	import uvicorn
 
-print("content:", content)
+	host = os.getenv("HOST", "0.0.0.0")
+	port = int(os.getenv("PORT", "6077"))
+	reload = os.getenv("RELOAD", "1") == "1"
+
+	uvicorn.run("main:app", host=host, port=port, reload=reload)
+
