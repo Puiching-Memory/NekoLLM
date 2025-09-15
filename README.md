@@ -11,14 +11,13 @@ sudo bash ./launcher.sh
 wget https://ghfast.top/https://github.com/conda-forge/miniforge/releases/download/25.3.1-0/Miniforge3-25.3.1-0-Linux-x86_64.sh
 wget https://ghfast.top/https://github.com/RubyMetric/chsrc/releases/download/v0.2.2/chsrc-x64-linux
 
-conda create -n napcat python=3.13
-conda activate napcat
-
-pip install ncatbot
+conda create -n ncatbot python=3.13
+conda activate ncatbot
+pip install -r requirements.txt
 
 ## 配置screen
-screen -R napcat
-screen -X -S <screen_name> quit
+screen -R ncatbot
+screen -X -S ncatbot quit
 
 # 插件制作板块
 

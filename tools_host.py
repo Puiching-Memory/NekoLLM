@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
 from fastapi import Security, Depends
+from ncatbot.core.api import BotAPI
 
 # --- 日志配置（loguru） ---
 # 移除了默认 handler 以便自定义；日志级别从环境变量 LOG_LEVEL 读取，默认 INFO。
@@ -35,9 +36,10 @@ app = FastAPI(
 	version="0.1.0",
 	lifespan=lifespan,
 )
-
 api_key_header = APIKeyHeader(name="Authorization")
+api = BotAPI()
 
+# API 密钥验证
 async def get_api_key(api_key: str = Security(api_key_header)):
     if api_key != os.getenv("API_TOKEN"):
         raise HTTPException(
@@ -45,9 +47,11 @@ async def get_api_key(api_key: str = Security(api_key_header)):
             detail="Invalid API Key",
         )
     return api_key
+# 戳一戳工具
 @app.post("/send_poke")
 async def send_poke(key: str = Depends(get_api_key), user_id: str = Query(), group_id: str = Query()):
-	return {"status": "ok"}
+    await api.send_poke(user_id=user_id, group_id=group_id)
+    return {"result": f"已戳一戳用户{user_id}"}
 
 if __name__ == "__main__":
 	# 本地开发入口：使用 uvicorn 启动服务
@@ -59,5 +63,5 @@ if __name__ == "__main__":
 	port = int(os.getenv("PORT", "6077"))
 	reload = os.getenv("RELOAD", "1") == "1"
 
-	uvicorn.run("main:app", host=host, port=port, reload=reload)
+	uvicorn.run("tools_host:app", host=host, port=port, reload=reload)
 
