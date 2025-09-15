@@ -6,10 +6,18 @@ from dashscope import Application
 import os
 import re
 import markdown
+import sys
+
+# Ensure project root is on sys.path so absolute imports like
+# `from dev_napcatBot.plugins._bot_api import api` work when plugins
+# are imported as top-level modules by the plugin loader.
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 logger = get_log()
 bot = CompatibleEnrollment
-from .._bot_api import api
+from dev_napcatBot.plugins._bot_api import api
 
 context = dict()
 
