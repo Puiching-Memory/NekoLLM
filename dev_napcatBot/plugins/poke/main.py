@@ -1,13 +1,12 @@
 from ncatbot.plugin import BasePlugin, CompatibleEnrollment
 from ncatbot.core import GroupMessage
-from ncatbot.core.api import BotAPI
-
 from ncatbot.utils import config
 from ncatbot.utils import get_log
+from dev_napcatBot.plugins._bot_api import api
 
 logger = get_log()
 bot = CompatibleEnrollment
-api = BotAPI()
+# use centralized `api` from dev_napcatBot.plugins._bot_api
 
 class poke(BasePlugin):
     name = "poke" # 插件名

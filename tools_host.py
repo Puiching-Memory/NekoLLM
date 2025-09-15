@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from fastapi.security import APIKeyHeader
 from fastapi import Security, Depends
 from ncatbot.core.api import BotAPI
+from dev_napcatBot.plugins._bot_api import api
 
 # --- 日志配置（loguru） ---
 # 移除了默认 handler 以便自定义；日志级别从环境变量 LOG_LEVEL 读取，默认 INFO。
@@ -37,7 +38,7 @@ app = FastAPI(
 	lifespan=lifespan,
 )
 api_key_header = APIKeyHeader(name="Authorization")
-api = BotAPI()
+# use centralized `api` from dev_napcatBot.plugins._bot_api
 
 # API 密钥验证
 async def get_api_key(api_key: str = Security(api_key_header)):

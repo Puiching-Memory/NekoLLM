@@ -1,5 +1,5 @@
 from datetime import datetime
-from ncatbot.core.api import BotAPI
+from dev_napcatBot.plugins._bot_api import api
 
 tools = [
     {
@@ -67,7 +67,7 @@ tools = [
     },
 ]
 
-api = BotAPI()
+# use centralized `api` from dev_napcatBot.plugins._bot_api
 
 # 戳一戳某个群友的工具
 async def send_poke(user_id: int, group_id: int):
