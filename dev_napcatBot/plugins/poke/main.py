@@ -2,7 +2,7 @@ from ncatbot.plugin import BasePlugin, CompatibleEnrollment
 from ncatbot.core import GroupMessage
 from ncatbot.utils import config
 from ncatbot.utils import get_log
-from dev_napcatBot.plugins._bot_api import api
+from .._bot_api import api
 
 logger = get_log()
 bot = CompatibleEnrollment

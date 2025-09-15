@@ -1,5 +1,5 @@
 from datetime import datetime
-from dev_napcatBot.plugins._bot_api import api
+from .._bot_api import api
 
 tools = [
     {

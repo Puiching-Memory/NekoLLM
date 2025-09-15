@@ -9,7 +9,7 @@ import markdown
 
 logger = get_log()
 bot = CompatibleEnrollment
-from dev_napcatBot.plugins._bot_api import api
+from .._bot_api import api
 
 context = dict()
 
