@@ -4,3 +4,4 @@ loguru
 openai
 ncatbot
 dashscope
+Markdown
