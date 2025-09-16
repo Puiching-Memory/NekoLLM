@@ -14,7 +14,7 @@ if ROOT not in sys.path:
 
 logger = get_log()
 bot = CompatibleEnrollment()
-from dev_napcatBot.plugins._bot_api import api
+api = BotAPI()
 
 context = dict()
 
@@ -22,7 +22,7 @@ class qwen3(BasePlugin):
     name = "qwen3" # 插件名
     version = "0.0.1" # 插件版本
 
-    @bot.group_event
+    @bot.group_event()
     async def on_group_message(msg: GroupMessage):
         if msg.self_id == msg.user_id: return # 忽略自己发的消息
         if str(msg.self_id) not in msg.raw_message: return # 仅回应at自己的消息
