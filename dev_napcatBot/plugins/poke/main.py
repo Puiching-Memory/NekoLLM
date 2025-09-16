@@ -1,19 +1,11 @@
 from ncatbot.plugin import BasePlugin, CompatibleEnrollment
-from ncatbot.core import GroupMessage
 from ncatbot.utils import config
 from ncatbot.utils import get_log
-import os
-import sys
 from ncatbot.core.api import BotAPI
-
-# Ensure project root is on sys.path for absolute imports
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
 api = BotAPI()
 logger = get_log()
-bot = CompatibleEnrollment()
+bot = CompatibleEnrollment
 
 class poke(BasePlugin):
     name = "poke" # 插件名

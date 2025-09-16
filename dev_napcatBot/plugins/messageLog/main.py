@@ -5,7 +5,7 @@ from ncatbot.utils import config
 from ncatbot.utils import get_log
 
 logger = get_log()
-bot = CompatibleEnrollment()
+bot = CompatibleEnrollment
 
 class messageLog(BasePlugin):
     name = "messageLog" # 插件名

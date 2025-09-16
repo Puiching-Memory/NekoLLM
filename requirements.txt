@@ -2,6 +2,6 @@ fastapi
 uvicorn
 loguru
 openai
-ncatbot<"4.0"
+ncatbot<4.0
 dashscope
 Markdown
