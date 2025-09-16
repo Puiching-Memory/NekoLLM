@@ -8,15 +8,12 @@ import re
 import markdown
 import sys
 
-# Ensure project root is on sys.path so absolute imports like
-# `from dev_napcatBot.plugins._bot_api import api` work when plugins
-# are imported as top-level modules by the plugin loader.
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 logger = get_log()
-bot = CompatibleEnrollment
+bot = CompatibleEnrollment()
 from dev_napcatBot.plugins._bot_api import api
 
 context = dict()
@@ -25,7 +22,7 @@ class qwen3(BasePlugin):
     name = "qwen3" # 插件名
     version = "0.0.1" # 插件版本
 
-    @bot.group_event()
+    @bot.group_event
     async def on_group_message(self, msg: GroupMessage):
         if msg.self_id == msg.user_id: return # 忽略自己发的消息
         if str(msg.self_id) not in msg.raw_message: return # 仅回应at自己的消息
