@@ -2,3 +2,5 @@ fastapi
 uvicorn
 loguru
 ncatbot<4.0
+py-jsonl
+pyecharts

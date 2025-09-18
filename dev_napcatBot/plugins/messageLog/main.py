@@ -28,11 +28,6 @@ def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
 
 
-def _date_str(ts: Optional[float]) -> str:
-    dt = datetime.fromtimestamp(ts) if ts else datetime.now()
-    return dt.strftime("%Y-%m-%d")
-
-
 def _safe_default(o: Any) -> Any:
     # 将不可序列化对象降级为字符串
     try:
@@ -249,7 +244,6 @@ class messageLog(BasePlugin):
             raw_message = getattr(msg, "raw_message", None)
             message_obj = getattr(msg, "message", None)
             ts = getattr(msg, "time", None)
-            date_str = _date_str(ts)
 
             # 提取图片URL与本地路径
             urls = []
@@ -260,13 +254,13 @@ class messageLog(BasePlugin):
 
             # 保存图片（下载+复制）
             base = _base_logs_dir()
-            images_dir = base / "images" / date_str / f"group_{group_id}"
+            images_dir = base / "images" / f"group_{group_id}"
             filename_prefix = _clean_filename(f"{int(ts) if ts else int(datetime.now().timestamp())}_{msg_id or 'msg'}")
             download_results = await _download_images(urls, images_dir, filename_prefix)
             copy_results = await _copy_local_images(local_paths, images_dir, filename_prefix)
 
             # 记录文本
-            messages_dir = base / "messages" / date_str
+            messages_dir = base / "messages"
             messages_file = messages_dir / f"group_{group_id}.jsonl"
             record: Dict[str, Any] = {
                 "time": ts,
@@ -295,9 +289,8 @@ class messageLog(BasePlugin):
     async def on_notice_event(msg: dict):
         try:
             ts = (msg or {}).get("time") if isinstance(msg, dict) else None
-            date_str = _date_str(ts if isinstance(ts, (int, float)) else None)
             base = _base_logs_dir()
-            notice_dir = base / "notice" / date_str
+            notice_dir = base / "notice"
             notice_file = notice_dir / "notice.jsonl"
 
             record = {
@@ -313,9 +306,8 @@ class messageLog(BasePlugin):
     async def on_request_event(msg: Union[GroupMessage, dict]):
         try:
             ts = getattr(msg, "time", None) if not isinstance(msg, dict) else msg.get("time")
-            date_str = _date_str(ts if isinstance(ts, (int, float)) else None)
             base = _base_logs_dir()
-            req_dir = base / "requests" / date_str
+            req_dir = base / "requests"
             req_file = req_dir / "request.jsonl"
 
             payload: Any
