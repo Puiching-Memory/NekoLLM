@@ -1,6 +1,5 @@
-from ncatbot.plugin import BasePlugin, CompatibleEnrollment
-from ncatbot.core import GroupMessage
-from ncatbot.core.api import BotAPI
+from ncatbot.plugin_system import NcatBotPlugin, command_registry, group_only
+from ncatbot.core.event import BaseMessageEvent
 from ncatbot.utils import get_log
 from dashscope import Application
 import os
@@ -8,27 +7,24 @@ import re
 import markdown
 
 logger = get_log()
-bot = CompatibleEnrollment
-api = BotAPI()
-
 context = dict()
 
-class qwen3(BasePlugin):
+class qwen3(NcatBotPlugin):
     name = "qwen3" # 插件名
     version = "0.0.1" # 插件版本
 
-    @bot.group_event()
-    async def on_group_message(msg: GroupMessage):
-        if msg.self_id == msg.user_id: return # 忽略自己发的消息
-        if str(msg.self_id) not in msg.raw_message: return # 仅回应at自己的消息
-        
-        logger.info(f"输入消息: {msg.raw_message}")
+    @group_only
+    async def on_group_message(self, event: BaseMessageEvent):
+        if event.self_id == event.user_id: return # 忽略自己发的消息
+        if str(event.self_id) not in event.raw_message: return # 仅回应at自己的消息
+
+        logger.info(f"输入消息: {event.message.filter_text()[0].text}")
 
         response = Application.call(
             api_key=os.getenv("DASHSCOPE_API_KEY"),
             app_id='30b765b512c245a28b73f0ec72a10042',
             prompt=[
-                {"role": "user", "text": msg.raw_message}
+                {"role": "user", "text": event.message.filter_text()[0].text}
             ],)
 
         # 格式化
@@ -36,7 +32,7 @@ class qwen3(BasePlugin):
         cleaned_text = markdown.markdown(cleaned_text)
         cleaned_text = re.sub('<[^>]+>', '', cleaned_text)
 
-        await msg.reply(text=cleaned_text, at=msg.user_id)
+        await event.reply(text=cleaned_text, at=event.user_id)
 
 
 if __name__ == "__main__":
