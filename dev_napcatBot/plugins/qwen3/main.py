@@ -1,4 +1,4 @@
-from ncatbot.plugin_system import NcatBotPlugin, command_registry, group_only
+from ncatbot.plugin_system import NcatBotPlugin, command_registry, group_filter
 from ncatbot.core.event import BaseMessageEvent
 from ncatbot.utils import get_log
 from dashscope import Application
@@ -13,7 +13,7 @@ class qwen3(NcatBotPlugin):
     name = "qwen3" # 插件名
     version = "0.0.1" # 插件版本
 
-    @group_only
+    @group_filter
     async def on_group_message(self, event: BaseMessageEvent):
         if event.self_id == event.user_id: return # 忽略自己发的消息
         if str(event.self_id) not in event.raw_message: return # 仅回应at自己的消息

@@ -1,5 +1,5 @@
 import jsonl
-from ncatbot.plugin_system import NcatBotPlugin, command_registry, group_only
+from ncatbot.plugin_system import NcatBotPlugin, command_registry, group_filter
 from ncatbot.core.event import BaseMessageEvent
 from ncatbot.utils import get_log
 
@@ -19,7 +19,7 @@ class messageLog(NcatBotPlugin):
         """插件卸载时调用，用于清理资源"""
         pass
 
-    @group_only
+    @group_filter
     async def on_group_message(self, event: BaseMessageEvent):
         # logger.info(f"save message: {event.to_dict()}")
 
