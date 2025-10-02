@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 loguru
-ncatbot==4.2.0
+ncatbot==4.2.2
 py-jsonl
 pyecharts
