@@ -14,7 +14,7 @@ class qwen3(NcatBotPlugin):
     version = "0.0.1" # 插件版本
 
     @group_filter
-    async def on_group_message(self, event: BaseMessageEvent):
+    async def reply_llm(self, event: BaseMessageEvent):
         if event.self_id == event.user_id: return # 忽略自己发的消息
         if str(event.self_id) not in event.raw_message: return # 仅回应at自己的消息
 
