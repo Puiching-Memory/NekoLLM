@@ -16,7 +16,7 @@ __all__ = ["create_proxy_app", "app"]
 def create_proxy_app() -> FastAPI:
     """Build the FastAPI application that proxies traffic to the upstream service."""
     api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
-    upstream_base_url = os.getenv("UPSTREAM_BASE_URL", "http://127.0.0.1:5141")
+    upstream_base_url = os.getenv("UPSTREAM_BASE_URL", "http://127.0.0.1:5140")
     http_client: httpx.AsyncClient | None = None
 
     @asynccontextmanager
