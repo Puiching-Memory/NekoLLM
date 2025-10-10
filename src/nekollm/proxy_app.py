@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from contextlib import asynccontextmanager
+from urllib.parse import urljoin
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, Security, status
@@ -15,6 +16,7 @@ __all__ = ["create_proxy_app", "app"]
 def create_proxy_app() -> FastAPI:
     """Build the FastAPI application that proxies traffic to the upstream service."""
     api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
+    upstream_base_url = os.getenv("UPSTREAM_BASE_URL", "http://127.0.0.1:5141")
     http_client: httpx.AsyncClient | None = None
 
     @asynccontextmanager
@@ -57,7 +59,8 @@ def create_proxy_app() -> FastAPI:
         if http_client is None:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Client not ready")
 
-        forward_url = f"http://127.0.0.1:5141/{path}"
+        base = upstream_base_url.rstrip("/") + "/"
+        forward_url = urljoin(base, path)
         filtered_headers = [(k, v) for k, v in request.headers.raw if k.lower() != b"host"]
         content = await request.body()
         forward_request = http_client.build_request(
@@ -65,8 +68,22 @@ def create_proxy_app() -> FastAPI:
             url=forward_url,
             headers=filtered_headers,
             content=content,
+            params=request.query_params,
         )
-        response = await http_client.send(forward_request)
+        try:
+            response = await http_client.send(forward_request)
+        except httpx.ConnectError as exc:
+            logger.error("Failed to connect to upstream {}: {}", forward_url, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to connect to upstream service",
+            ) from exc
+        except httpx.HTTPError as exc:
+            logger.error("Upstream request error for {}: {}", forward_url, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Upstream service responded with an error",
+            ) from exc
         return Response(
             content=response.content,
             status_code=response.status_code,

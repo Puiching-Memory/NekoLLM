@@ -9,6 +9,8 @@
 git clone https://github.com/Puiching-Memory/NekoLLM.git
 cd NekoLLM
 
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # 创建/激活虚拟环境并同步依赖
 uv venv
 uv sync
@@ -36,7 +38,4 @@ uv run nekollm
 - `HOST` / `PORT`：可分别覆盖服务监听地址与端口。
 - `RELOAD`：设置为 `1` 以启用热重载（默认关闭）。
 - `NEKOLLM_APP`：`proxy` 或 `tools`，决定 `uv run nekollm` 启动的实例。
-
-## 兼容性说明
-
-历史脚本 `koishiOnLine.py`、`tools_host.py`、`token_generator.py` 仍保留为兼容入口，但推荐通过 `uv run` 使用新的脚本命令。
+- `UPSTREAM_BASE_URL`：反向代理的目标地址，默认 `http://127.0.0.1:5141`。
