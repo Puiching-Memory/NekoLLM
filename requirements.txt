@@ -1,4 +1,0 @@
-fastapi
-uvicorn
-loguru
-ncatbot==4.2.4
