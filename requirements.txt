@@ -1,4 +1,4 @@
 fastapi
 uvicorn
 loguru
-ncatbot==4.2.3
+ncatbot==4.2.4
