@@ -12,6 +12,7 @@ db:
 ssl:
   enabled: $(SSL_ACTIVE)
   port: 3443
+  redirectionEnabled: true
   provider: custom
   format: pem
   key: /ssl/cert.key
