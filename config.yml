@@ -1,6 +1,5 @@
 port: 3000
 bindIP: 0.0.0.0
-redirectPort: 80
 db:
   type: $(DB_TYPE)
   host: '$(DB_HOST)'
@@ -13,13 +12,9 @@ db:
 ssl:
   enabled: $(SSL_ACTIVE)
   port: 3443
-  provider: custom
-  format: pem
-  key: /ssl/cert.key
-  cert: /ssl/cert.pem
-  pfx: path/to/cert.pfx
-  passphrase: null
-  dhparam: null
+  provider: letsencrypt
+  domain: www.pullmypush.xyz
+  subscriberEmail: 1138663075@qq.com
 logLevel: $(LOG_LEVEL:info)
 logFormat: $(LOG_FORMAT:default)
 ha: $(HA_ACTIVE)
