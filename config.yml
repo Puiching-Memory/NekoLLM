@@ -10,11 +10,14 @@ db:
   storage: $(DB_FILEPATH)
   ssl: $(DB_SSL)
 ssl:
-  enabled: $(SSL_ACTIVE)
+  enabled: true
   port: 3443
-  provider: letsencrypt
-  domain: www.pullmypush.xyz
-  subscriberEmail: 1138663075@qq.com
+  provider: custom
+  format: pem
+  key: /ssl/cert.key
+  cert: /ssl/cert.pem
+  passphrase: null
+  dhparam: null
 logLevel: $(LOG_LEVEL:info)
 logFormat: $(LOG_FORMAT:default)
 ha: $(HA_ACTIVE)
